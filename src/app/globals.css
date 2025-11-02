@@ -18,6 +18,10 @@
 @theme inline {
   --font-sans: var(--font-nunito), var(--font-noto-myanmar);
   --font-myanmar: var(--font-noto-myanmar);
+  /* Tailwind v4: define custom colors here so utility classes pick them up */
+  --color-brown: #221f20;
+  --color-p3: #9d6db8;
+  --color-p2: #67377e;
 }
 
 body {

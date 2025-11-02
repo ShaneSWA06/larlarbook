@@ -1,38 +1,44 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { useSession, signIn, signOut } from 'next-auth/react'
-import { 
-  Search, 
-  Bell,
-  Edit3,
-  User,
-  LogOut,
-  Settings
-} from 'lucide-react'
+import { useState } from "react";
+import Link from "next/link";
+import { useSession, signIn, signOut } from "next-auth/react";
+import { User, LogOut, Settings, Menu } from "lucide-react";
+import Image from "next/image";
 
 export default function Header() {
-  const { data: session } = useSession()
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
+  const { data: session } = useSession();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
   return (
-    <header className="bg-gray-900 text-white px-6 py-4 flex items-center justify-between">
-      {/* Left side - Menu button (handled by sidebar) */}
-      <div className="flex items-center space-x-4">
-        {/* This space is for the sidebar toggle, handled in sidebar component */}
+    <header className="bg-[#181818] text-white px-6 py-4 flex items-center justify-between">
+      {/* Left side - Brand */}
+      <div className="flex items-center space-x-3">
+        <button
+          className="p-2 rounded-md hover:bg-gray-800"
+          aria-label="Open menu"
+        >
+          <Menu className="w-6 h-6 text-p3" strokeWidth={3} />
+        </button>
+        <Link href="/" className="flex items-center space-x-2">
+          <Image
+            src="/logo.png"
+            alt="LarLar Books logo"
+            width={28}
+            height={28}
+            className="rounded-none"
+          />
+          <span className="font-bold text-lg">LarLar Books</span>
+        </Link>
       </div>
 
       {/* Center - Search Bar */}
       <div className="flex-1 max-w-2xl mx-8">
         <div className="relative">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search className="h-5 w-5 text-gray-400" />
-          </div>
           <input
             type="text"
             placeholder="Search..."
-            className="block w-full pl-12 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-full leading-5 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-logo-purple focus:border-transparent text-white"
+            className="block w-full px-4 py-3 bg-brown rounded-[10px] leading-5 placeholder-gray-400 focus:outline-none text-white"
           />
         </div>
       </div>
@@ -42,18 +48,15 @@ export default function Header() {
         {/* Write Button */}
         <Link
           href="/write"
-          className="flex items-center space-x-2 bg-logo-purple hover:bg-p1 px-4 py-2 rounded-full text-white font-medium transition-colors"
+          className="flex items-center space-x-2 bg-p2 hover:bg-p1 px-4 py-2 rounded-[30px] text-white font-medium transition-colors"
         >
-          <Edit3 className="w-4 h-4" />
+          <Image src="/note.png" alt="Write" width={20} height={20} />
           <span>Write</span>
         </Link>
 
         {/* Notifications */}
-        <button className="p-2 text-gray-400 hover:text-white transition-colors relative">
-          <Bell className="w-5 h-5" />
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
-            3
-          </span>
+        <button className="p-2 hover:opacity-90 transition-opacity">
+          <Image src="/bell.png" alt="Notifications" width={20} height={20} />
         </button>
 
         {/* User Menu */}
@@ -66,7 +69,7 @@ export default function Header() {
               {session.user?.image ? (
                 <img
                   src={session.user.image}
-                  alt={session.user.name || 'User'}
+                  alt={session.user.name || "User"}
                   className="w-8 h-8 rounded-full"
                 />
               ) : (
@@ -81,11 +84,9 @@ export default function Header() {
               <div className="absolute right-0 mt-2 w-48 bg-gray-800 rounded-lg shadow-lg border border-gray-700 py-1 z-50">
                 <div className="px-4 py-2 border-b border-gray-700">
                   <p className="text-sm font-medium text-white">
-                    {session.user?.name || 'User'}
+                    {session.user?.name || "User"}
                   </p>
-                  <p className="text-xs text-gray-400">
-                    {session.user?.email}
-                  </p>
+                  <p className="text-xs text-gray-400">{session.user?.email}</p>
                 </div>
                 <Link
                   href="/profile"
@@ -122,5 +123,5 @@ export default function Header() {
         )}
       </div>
     </header>
-  )
+  );
 }
