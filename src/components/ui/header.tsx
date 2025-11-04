@@ -6,7 +6,11 @@ import { useSession, signIn, signOut } from "next-auth/react";
 import { User, LogOut, Settings, Menu } from "lucide-react";
 import Image from "next/image";
 
-export default function Header() {
+type HeaderProps = {
+  onToggleSidebar?: () => void
+}
+
+export default function Header({ onToggleSidebar }: HeaderProps) {
   const { data: session } = useSession();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
 
@@ -17,6 +21,7 @@ export default function Header() {
         <button
           className="p-2 rounded-md hover:bg-gray-800"
           aria-label="Open menu"
+          onClick={onToggleSidebar}
         >
           <Menu className="w-6 h-6 text-p3" strokeWidth={3} />
         </button>

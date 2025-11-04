@@ -32,7 +32,7 @@ export default {
         "color-3": "#7C3AED",
         p1: "#6D28D9",
         p2: "#8B5CF6",
-        p3: "#A78BFA",
+        p3: "#9d6db8",
         w1: "#FFFFFF",
         w2: "#F9FAFB",
         "grey-lines": "#6B7280",

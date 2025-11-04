@@ -1,94 +1,76 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import Link from 'next/link'
-import { 
-  Home, 
-  BookOpen, 
-  Bookmark, 
-  Plus, 
-  Users, 
-  CreditCard,
-  Menu,
-  X
-} from 'lucide-react'
+import Link from "next/link";
+import Image from "next/image";
+import { usePathname } from "next/navigation";
 
 const sidebarItems = [
-  { icon: Home, label: 'Home', href: '/', active: true },
-  { icon: BookOpen, label: 'My Library', href: '/library' },
-  { icon: Bookmark, label: 'Bookmarks', href: '/bookmarks' },
-  { icon: Plus, label: 'Add Book', href: '/add-book' },
-  { icon: Users, label: 'Authors', href: '/authors' },
-  { icon: CreditCard, label: 'Purchases', href: '/purchases' },
-]
+  { iconSrc: "/home.png", label: "Home", href: "/" },
+  { iconSrc: "/books.png", label: "Library", href: "/library" },
+  { iconSrc: "/bookMark.png", label: "Purchased Books", href: "/bookmarks" },
+  { iconSrc: "/save.png", label: "Read Later", href: "/saved" },
+  { iconSrc: "/add.png", label: "Add Library", href: "/add-book" },
+  { iconSrc: "/profile.png", label: "Followed Authors", href: "/profile" },
+  { iconSrc: "/license.png", label: "Membership", href: "/license" },
+];
 
-export default function Sidebar() {
-  const [isCollapsed, setIsCollapsed] = useState(false)
+type SidebarProps = { expanded?: boolean };
+
+export default function Sidebar({ expanded = false }: SidebarProps) {
+  const pathname = usePathname();
 
   return (
-    <>
-      {/* Mobile overlay */}
-      <div className="lg:hidden fixed inset-0 bg-black bg-opacity-50 z-40" />
-      
-      {/* Sidebar */}
-      <div className={`fixed left-0 top-0 h-full bg-gray-900 text-white z-50 transition-all duration-300 ${
-        isCollapsed ? 'w-16' : 'w-64'
-      }`}>
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          {!isCollapsed && (
-            <div className="flex items-center space-x-2">
-              <div className="w-8 h-8 bg-logo-purple rounded-lg flex items-center justify-center">
-                <BookOpen className="w-5 h-5" />
-              </div>
-              <span className="font-bold text-lg">LarLar Books</span>
-            </div>
-          )}
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1 rounded-lg hover:bg-gray-700 transition-colors"
-          >
-            {isCollapsed ? <Menu className="w-5 h-5" /> : <X className="w-5 h-5" />}
-          </button>
-        </div>
+    <div
+      className={`fixed left-0 top-20 bottom-0 bg-[#181818] text-white z-50 border-r border-[#454545] transition-all duration-300 ease-in-out ${
+        expanded ? "w-64" : "w-20"
+      }`}
+    >
+      <nav className="mt-6">
+        <ul className="flex flex-col space-y-6">
+          {sidebarItems.map((item, index) => {
+            const isActive = pathname === item.href;
 
-        {/* Navigation */}
-        <nav className="mt-6">
-          <ul className="space-y-2 px-3">
-            {sidebarItems.map((item, index) => {
-              const Icon = item.icon
-              return (
-                <li key={index}>
-                  <Link
-                    href={item.href}
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg transition-colors ${
-                      item.active 
-                        ? 'bg-logo-purple text-white' 
-                        : 'text-gray-300 hover:bg-gray-700 hover:text-white'
-                    }`}
+            return (
+              <li key={index} className="w-full">
+                <Link
+                  href={item.href}
+                  className={`flex items-center gap-3 p-2 rounded-lg hover:bg-[#202020] transition-colors ${
+                    expanded ? "pl-6 pr-3" : "justify-center"
+                  }`}
+                  aria-label={item.label}
+                >
+                  {/* Icon with fixed size and centered */}
+                  <div className="flex-shrink-0 w-[28px] h-[28px] flex items-center justify-center">
+                    <Image
+                      src={item.iconSrc}
+                      alt={`${item.label} icon`}
+                      width={24}
+                      height={24}
+                      className="w-[20px] h-[24px] object-contain"
+                      style={{
+                        filter: isActive
+                          ? "brightness(0) saturate(100%) invert(56%) sepia(26%) saturate(1000%) hue-rotate(226deg) brightness(92%) contrast(85%)"
+                          : "none",
+                      }}
+                    />
+                  </div>
+
+                  {/* Text with consistent font size and smooth transition */}
+                  <span
+                    className={`text-sm font-medium whitespace-nowrap transition-all duration-300 ${
+                      expanded
+                        ? "opacity-100 translate-x-0"
+                        : "opacity-0 -translate-x-4 pointer-events-none absolute"
+                    } ${isActive ? "text-p3" : ""}`}
                   >
-                    <Icon className="w-5 h-5 flex-shrink-0" />
-                    {!isCollapsed && <span>{item.label}</span>}
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-        </nav>
-
-        {/* Bottom section */}
-        {!isCollapsed && (
-          <div className="absolute bottom-4 left-4 right-4">
-            <div className="bg-gray-800 rounded-lg p-4">
-              <h4 className="font-semibold text-sm mb-2">Reading Goal</h4>
-              <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
-                <div className="bg-logo-purple h-2 rounded-full" style={{ width: '60%' }}></div>
-              </div>
-              <p className="text-xs text-gray-400">6 of 10 books read</p>
-            </div>
-          </div>
-        )}
-      </div>
-    </>
-  )
+                    {item.label}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    </div>
+  );
 }
