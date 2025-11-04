@@ -13,6 +13,15 @@ const categories = [
   "Romance",
 ];
 
+// Section templates to scaffold the body
+const sectionTitles = [
+  "Continue Reading",
+  "Recommended Books",
+  "Trending Books",
+  "Recommended Series",
+  "Business",
+];
+
 export default function Home() {
   const [sidebarExpanded, setSidebarExpanded] = useState(false);
   return (
@@ -26,7 +35,11 @@ export default function Home() {
       <Sidebar expanded={sidebarExpanded} />
 
       {/* Main Content */}
-      <div className={`min-h-screen transition-all duration-300 ease-in-out ${sidebarExpanded ? "ml-64" : "ml-20"}`}>
+      <div
+        className={`min-h-screen transition-all duration-300 ease-in-out ${
+          sidebarExpanded ? "ml-64" : "ml-20"
+        }`}
+      >
         {/* Main Content Area */}
         <main className="p-6">
           {/* Category Navigation */}
@@ -47,7 +60,12 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Book sections removed per request */}
+          {/* Template Sections (no books yet) */}
+          {sectionTitles.map((title) => (
+            <section key={title} className="mt-10">
+              <h2 className="text-white text-lg font-semibold">{title}</h2>
+            </section>
+          ))}
         </main>
       </div>
     </div>

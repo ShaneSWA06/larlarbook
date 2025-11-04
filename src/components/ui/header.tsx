@@ -119,12 +119,20 @@ export default function Header({ onToggleSidebar }: HeaderProps) {
             )}
           </div>
         ) : (
-          <button
-            onClick={() => signIn()}
-            className="bg-logo-purple text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-p1 transition-colors"
-          >
-            Sign In
-          </button>
+          <div className="flex items-center space-x-3">
+            <Link
+              href="/auth/signin"
+              className="text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-gray-800 transition-colors"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/auth/signup"
+              className="bg-p2 text-white px-4 py-2 rounded-full text-sm font-medium hover:bg-p1 transition-colors"
+            >
+              Sign Up
+            </Link>
+          </div>
         )}
       </div>
     </header>
