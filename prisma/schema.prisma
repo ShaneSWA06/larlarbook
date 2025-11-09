@@ -9,252 +9,192 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
-// User Management
-model User {
-  id            String    @id @default(cuid())
-  email         String    @unique
-  name          String?
-  password      String?   // Hashed password for credentials login
-  image         String?
-  emailVerified DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+// Profiles (Users) - Platform users with authentication
+model Profile {
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email      String?   @unique
+  password   String?   // Hashed password
+  username   String?   @unique
+  fullName   String?   @map("full_name")
+  avatarUrl  String?   @map("avatar_url")
+  createdAt  DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  // Authentication
-  accounts Account[]
-  sessions Session[]
-
-  // User preferences
-  preferredLanguage String @default("my") // Myanmar/Burmese
-  theme            String @default("light")
-  
-  // Reading progress and library
+  // Relations
+  reviews        Review[]
+  comments       Comment[]
   readingProgress ReadingProgress[]
-  bookmarks       Bookmark[]
-  reviews         Review[]
-  purchases       Purchase[]
-  
-  // Membership
-  membership      Membership?
-  
+  userLibrary    UserLibrary[]
+
+  @@map("profiles")
+}
+
+// Users
+model User {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                  String
+  userId                String?   @map("user_id") @db.Uuid
+  profileImageUrl       String?   @map("profile_image_url")
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  books Book[]
+
   @@map("users")
 }
 
-model Account {
-  id                String  @id @default(cuid())
-  userId            String
-  type              String
-  provider          String
-  providerAccountId String
-  refresh_token     String? @db.Text
-  access_token      String? @db.Text
-  expires_at        Int?
-  token_type        String?
-  scope             String?
-  id_token          String? @db.Text
-  session_state     String?
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([provider, providerAccountId])
-  @@map("accounts")
-}
-
-model Session {
-  id           String   @id @default(cuid())
-  sessionToken String   @unique
-  userId       String
-  expires      DateTime
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@map("sessions")
-}
-
-model VerificationToken {
-  identifier String
-  token      String   @unique
-  expires    DateTime
-
-  @@unique([identifier, token])
-  @@map("verificationtokens")
-}
-
-// Content Management
+// Authors
 model Author {
-  id          String   @id @default(cuid())
-  name        String
-  nameEn      String? // English name
-  bio         String?
-  bioEn       String? // English bio
-  image       String?
-  birthDate   DateTime?
-  deathDate   DateTime?
-  nationality String   @default("Myanmar")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name         String
+  contactEmail String?   @map("contact_email")
+  website      String?
+  userId       String?   @map("user_id") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  books Book[]
+  // Relations
+  books Book[] @relation("BookAuthor")
 
   @@map("authors")
 }
 
-model Category {
-  id          String   @id @default(cuid())
-  name        String   @unique
-  nameEn      String?  @unique // English name
-  description String?
-  slug        String   @unique
-  parentId    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+// Genres
+model Genre {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  genreName String   @map("genre_name")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children Category[] @relation("CategoryHierarchy")
-  books    Book[]
+  // Relations
+  bookGenres BookGenre[]
 
-  @@map("categories")
+  @@map("genres")
 }
 
-model Series {
-  id          String   @id @default(cuid())
-  title       String
-  titleEn     String? // English title
-  description String?
-  image       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  books Book[]
-
-  @@map("series")
-}
-
+// Books
 model Book {
-  id          String   @id @default(cuid())
-  title       String
-  titleEn     String? // English title
-  description String?
-  isbn        String?  @unique
-  language    String   @default("my") // Myanmar/Burmese
-  
-  // File information
-  fileUrl     String? // EPUB/PDF file URL
-  fileSize    Int? // File size in bytes
-  fileType    String? // epub, pdf
-  coverUrl    String?
-  
-  // Metadata
-  pageCount   Int?
-  wordCount   Int?
-  publishedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  // Pricing and availability
-  price       Decimal? @db.Decimal(10, 2)
-  isFree      Boolean  @default(false)
-  isPublished Boolean  @default(false)
-  
-  // Relationships
-  authorId    String
-  author      Author   @relation(fields: [authorId], references: [id])
-  categoryId  String
-  category    Category @relation(fields: [categoryId], references: [id])
-  seriesId    String?
-  series      Series?  @relation(fields: [seriesId], references: [id])
-  
-  // User interactions
-  readingProgress ReadingProgress[]
-  bookmarks       Bookmark[]
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookName        String    @map("book_name")
+  bookCoverPath   String?   @map("book_cover_path")
+  authorId        String?   @map("author_id") @db.Uuid
+  publisherId     String?   @map("publisher_id") @db.Uuid
+  status          String?
+  description     String?
+  isbn            String?
+  pageCount       Int?      @map("page_count")
+  language        String?   @default("en")
+  price           Decimal?  @db.Decimal
+  publicationDate DateTime? @map("publication_date") @db.Date
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  // Relations
+  user            User?             @relation(fields: [authorId], references: [id])
+  author          Author?           @relation("BookAuthor", fields: [publisherId], references: [id])
+  bookGenres      BookGenre[]
+  bookContent     BookContent[]
   reviews         Review[]
-  purchases       Purchase[]
+  comments        Comment[]
+  readingProgress ReadingProgress[]
+  userLibrary     UserLibrary[]
 
   @@map("books")
 }
 
-// User Interactions
-model ReadingProgress {
-  id           String   @id @default(cuid())
-  userId       String
-  bookId       String
-  progress     Float    @default(0) // 0-100 percentage
-  currentPage  Int?
-  lastPosition String? // For EPUB: CFI, for PDF: page number
-  timeSpent    Int      @default(0) // Reading time in minutes
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+// Book Genres (Junction Table)
+model BookGenre {
+  id      BigInt  @id @default(autoincrement())
+  bookId  String? @map("book_id") @db.Uuid
+  genreId String? @map("genre_id") @db.Uuid
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  // Relations
+  book  Book?  @relation(fields: [bookId], references: [id])
+  genre Genre? @relation(fields: [genreId], references: [id])
 
-  @@unique([userId, bookId])
-  @@map("reading_progress")
+  @@map("book_genres")
 }
 
-model Bookmark {
-  id       String   @id @default(cuid())
-  userId   String
-  bookId   String
-  position String // CFI for EPUB, page for PDF
-  note     String?
-  createdAt DateTime @default(now())
+// Book Content
+model BookContent {
+  id          String  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookId      String? @map("book_id") @db.Uuid
+  contentType String  @map("content_type")
+  pdfPath     String? @map("pdf_path")
+  jsonContent Json?   @map("json_content")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  // Relations
+  book Book? @relation(fields: [bookId], references: [id])
 
-  @@map("bookmarks")
+  @@map("book_content")
 }
 
+// Reviews
 model Review {
-  id        String   @id @default(cuid())
-  userId    String
-  bookId    String
-  rating    Int // 1-5 stars
-  comment   String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookId     String?   @map("book_id") @db.Uuid
+  userId     String?   @map("user_id") @db.Uuid
+  rating     Int?      @db.SmallInt
+  reviewText String?   @map("review_text")
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  // Relations
+  book Book?    @relation(fields: [bookId], references: [id])
+  user Profile? @relation(fields: [userId], references: [id])
 
-  @@unique([userId, bookId])
   @@map("reviews")
 }
 
-// Commerce
-model Purchase {
-  id          String   @id @default(cuid())
-  userId      String
-  bookId      String
-  amount      Decimal  @db.Decimal(10, 2)
-  currency    String   @default("USD")
-  stripeId    String?  @unique
-  status      String   @default("pending") // pending, completed, failed, refunded
-  createdAt   DateTime @default(now())
+// Comments
+model Comment {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bookId      String?   @map("book_id") @db.Uuid
+  userId      String?   @map("user_id") @db.Uuid
+  commentText String    @map("comment_text")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  book Book @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  // Relations
+  book Book?    @relation(fields: [bookId], references: [id])
+  user Profile? @relation(fields: [userId], references: [id])
 
-  @@unique([userId, bookId])
-  @@map("purchases")
+  @@map("comments")
 }
 
-model Membership {
-  id        String   @id @default(cuid())
-  userId    String   @unique
-  type      String   @default("free") // free, premium, pro
-  status    String   @default("active") // active, cancelled, expired
-  startDate DateTime @default(now())
-  endDate   DateTime?
-  stripeId  String?  @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// Reading Progress
+model ReadingProgress {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  bookId      String    @map("book_id") @db.Uuid
+  currentPage Int?      @default(0) @map("current_page")
+  lastReadAt  DateTime? @default(now()) @map("last_read_at") @db.Timestamptz(6)
+  bookmarks   Json?     @default("[]")
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Relations
+  user Profile @relation(fields: [userId], references: [id])
+  book Book    @relation(fields: [bookId], references: [id])
 
-  @@map("memberships")
+  @@map("reading_progress")
+}
+
+// User Library
+model UserLibrary {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  bookId        String    @map("book_id") @db.Uuid
+  purchasedAt   DateTime? @default(now()) @map("purchased_at") @db.Timestamptz(6)
+  purchasePrice Decimal?  @map("purchase_price") @db.Decimal
+
+  // Relations
+  user Profile @relation(fields: [userId], references: [id])
+  book Book    @relation(fields: [bookId], references: [id])
+
+  @@map("user_library")
 }
