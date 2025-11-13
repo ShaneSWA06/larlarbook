@@ -152,15 +152,15 @@ export default function SignUpPage() {
         {error && (
           <div
             role="alert"
-            className="mb-4 flex items-start gap-3 rounded-lg border border-error-color bg-error-color/10 p-3"
+            className="mb-4 flex items-start gap-3 rounded-lg border border-red-400 bg-error-color p-3"
           >
-            <svg className="w-5 h-5 text-error-color" viewBox="0 0 24 24" aria-hidden="true">
+            <svg className="w-5 h-5 text-white" viewBox="0 0 24 24" aria-hidden="true">
               <path fill="currentColor" d="M11 7h2v6h-2V7zm0 8h2v2h-2v-2z" />
               <path fill="currentColor" d="M1 21h22L12 2 1 21z" />
             </svg>
             <div className="space-y-1">
-              <p className="text-error-color text-sm font-medium">Sign up failed</p>
-              <p className="text-error-color/90 text-xs">{error}</p>
+              <p className="text-white text-sm font-medium">Sign up failed</p>
+              <p className="text-white/90 text-xs">{error}</p>
             </div>
           </div>
         )}

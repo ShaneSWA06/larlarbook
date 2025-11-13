@@ -1,17 +1,10 @@
 "use client";
 import { useState } from "react";
+import { useSidebar } from "@/components/providers/sidebar-provider";
 import Header from "@/components/ui/header";
 import Sidebar from "@/components/ui/sidebar";
-
-// Category chips (History removed)
-const categories = [
-  "Economics",
-  "Romance",
-  "Economics",
-  "Romance",
-  "Economics",
-  "Romance",
-];
+import CategoryChips from "@/components/ui/category-chips";
+import { defaultCategories } from "@/data/categories";
 
 // Section templates to scaffold the body
 const sectionTitles = [
@@ -23,11 +16,14 @@ const sectionTitles = [
 ];
 
 export default function Home() {
-  const [sidebarExpanded, setSidebarExpanded] = useState(false);
+  const { expanded: sidebarExpanded, toggle } = useSidebar();
+  const [selectedCategory, setSelectedCategory] = useState<string>(
+    defaultCategories[0]
+  );
   return (
     <div className="min-h-screen bg-[#181818]">
       {/* Header (full width) */}
-      <Header onToggleSidebar={() => setSidebarExpanded((v) => !v)} />
+      <Header onToggleSidebar={toggle} />
       {/* Divider below header (full width) */}
       <div className="w-full h-[1px] bg-[#454545]"></div>
 
@@ -42,23 +38,11 @@ export default function Home() {
       >
         {/* Main Content Area */}
         <main className="p-6">
-          {/* Category Navigation */}
-          <div className="mb-8">
-            <div className="flex space-x-4 overflow-x-auto pb-2">
-              {categories.map((category, index) => (
-                <button
-                  key={index}
-                  className={`px-4 py-2 rounded-full whitespace-nowrap text-sm font-medium transition-colors ${
-                    index === 0
-                      ? "bg-logo-purple text-white"
-                      : "bg-white text-gray-700 hover:bg-gray-50"
-                  }`}
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-          </div>
+          <CategoryChips
+            categories={defaultCategories}
+            selected={selectedCategory}
+            onChange={setSelectedCategory}
+          />
 
           {/* Template Sections (no books yet) */}
           {sectionTitles.map((title) => (

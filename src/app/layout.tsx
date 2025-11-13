@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Nunito, Noto_Sans } from "next/font/google";
 import "./globals.css";
 import AuthSessionProvider from "@/components/providers/session-provider";
+import { SidebarProvider } from "@/components/providers/sidebar-provider";
 
 const nunito = Nunito({
   variable: "--font-nunito",
@@ -45,9 +46,11 @@ export default function RootLayout({
       <body
         className={`${nunito.variable} ${notoSansMyanmar.variable} antialiased font-sans`}
       >
-        <AuthSessionProvider>
-          {children}
-        </AuthSessionProvider>
+        <SidebarProvider>
+          <AuthSessionProvider>
+            {children}
+          </AuthSessionProvider>
+        </SidebarProvider>
       </body>
     </html>
   );

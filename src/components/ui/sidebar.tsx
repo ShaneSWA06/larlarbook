@@ -48,9 +48,13 @@ export default function Sidebar({ expanded = false }: SidebarProps) {
                       height={24}
                       className="w-[20px] h-[24px] object-contain"
                       style={{
-                        filter: isActive
-                          ? "brightness(0) saturate(100%) invert(56%) sepia(26%) saturate(1000%) hue-rotate(226deg) brightness(92%) contrast(85%)"
-                          : "none",
+                        // When on the Library page, force the Home icon to display white
+                        filter:
+                          (pathname.startsWith("/library") && item.href === "/")
+                            ? "brightness(0) invert(1)"
+                            : isActive
+                            ? "brightness(0) saturate(100%) invert(56%) sepia(26%) saturate(1000%) hue-rotate(226deg) brightness(92%) contrast(85%)"
+                            : "none",
                       }}
                     />
                   </div>

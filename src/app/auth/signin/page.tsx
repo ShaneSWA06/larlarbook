@@ -121,10 +121,10 @@ export default function SignInPage() {
           {error && (
             <div
               role="alert"
-              className="mb-4 p-3 bg-error-color/10 border border-error-color rounded-lg flex items-center gap-2"
+              className="mb-4 p-3 bg-error-color border border-red-400 rounded-lg flex items-center gap-2"
             >
               <svg
-                className="w-5 h-5 text-error-color"
+                className="w-5 h-5 text-white"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -136,7 +136,7 @@ export default function SignInPage() {
                   d="M12 9v4m0 4h.01M10.29 3.86l-8.46 14.66A2 2 0 003.54 21h16.92a2 2 0 001.71-3.48L13.71 3.86a2 2 0 00-3.42 0z"
                 />
               </svg>
-              <p className="text-error-color text-sm font-medium">{error}</p>
+              <p className="text-white text-sm font-medium">{error}</p>
             </div>
           )}
 
