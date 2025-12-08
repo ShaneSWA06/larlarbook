@@ -21,8 +21,10 @@ export async function GET() {
         username: true,
         fullName: true,
         avatarUrl: true,
+        phone: true,
         createdAt: true,
         updatedAt: true,
+        userSettings: true,
       },
     });
 
