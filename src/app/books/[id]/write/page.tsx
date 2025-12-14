@@ -31,6 +31,7 @@ export default function WriteBookPage() {
   const [currentChapterId, setCurrentChapterId] = useState("1");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [bookStatus, setBookStatus] = useState<string | null>(null);
 
   useEffect(() => {
     if (bookId) {
@@ -43,9 +44,10 @@ export default function WriteBookPage() {
       setLoading(true);
       const response = await fetch(`/api/books/${bookId}`);
       const data = await response.json();
-      
+
       if (data.success && data.book) {
         setBookTitle(data.book.bookName);
+        setBookStatus(data.book.status || null);
         // Load chapters if they exist
         if (data.book.chapters && data.book.chapters.length > 0) {
           setChapters(data.book.chapters);
@@ -88,9 +90,10 @@ export default function WriteBookPage() {
     );
   };
 
-  const handleSaveDraft = async () => {
+  const handleSaveDraft = async (showAlert = true) => {
     setSaving(true);
     try {
+      console.log("Saving draft with chapters:", chapters);
       const response = await fetch(`/api/books/${bookId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -101,14 +104,29 @@ export default function WriteBookPage() {
       });
 
       const data = await response.json();
+      console.log("Save draft response:", data);
       if (data.success) {
-        alert("Draft saved successfully!");
+        setBookStatus("draft");
+        if (showAlert) {
+          alert("Draft saved successfully!");
+        }
+        return true;
       } else {
-        alert("Failed to save draft");
+        if (showAlert) {
+          alert(`Failed to save draft: ${data.error || "Unknown error"}`);
+        }
+        return false;
       }
     } catch (error) {
       console.error("Error saving draft:", error);
-      alert("Error saving draft");
+      if (showAlert) {
+        alert(
+          `Error saving draft: ${
+            error instanceof Error ? error.message : "Unknown error"
+          }`
+        );
+      }
+      return false;
     } finally {
       setSaving(false);
     }
@@ -121,6 +139,7 @@ export default function WriteBookPage() {
 
     setSaving(true);
     try {
+      console.log("Publishing book with chapters:", chapters);
       const response = await fetch(`/api/books/${bookId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -131,15 +150,20 @@ export default function WriteBookPage() {
       });
 
       const data = await response.json();
+      console.log("Publish response:", data);
       if (data.success) {
         alert("Book published successfully!");
         router.push("/books");
       } else {
-        alert("Failed to publish book");
+        alert(`Failed to publish book: ${data.error || "Unknown error"}`);
       }
     } catch (error) {
       console.error("Error publishing book:", error);
-      alert("Error publishing book");
+      alert(
+        `Error publishing book: ${
+          error instanceof Error ? error.message : "Unknown error"
+        }`
+      );
     } finally {
       setSaving(false);
     }
@@ -164,14 +188,27 @@ export default function WriteBookPage() {
       <div className="bg-[#1E1E1E] border-b border-[#454545] p-4 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <button
-            onClick={() => router.push("/books/upload")}
+            onClick={async () => {
+              // Save as draft first if there are changes
+              const saved = await handleSaveDraft(false);
+
+              // If book is draft, go to upload page to edit details
+              // If published, go to books page
+              if (bookStatus === "draft" || !bookStatus) {
+                router.push(`/books/upload?bookId=${bookId}`);
+              } else {
+                router.push("/books");
+              }
+            }}
             className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors"
           >
             <ArrowLeft className="w-5 h-5" />
             <span>Back to Details</span>
           </button>
           <div className="w-px h-6 bg-[#454545]"></div>
-          <h2 className="text-white font-medium">{bookTitle || "Untitled Book"}</h2>
+          <h2 className="text-white font-medium">
+            {bookTitle || "Untitled Book"}
+          </h2>
         </div>
 
         <div className="flex items-center gap-3">

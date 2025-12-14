@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { BookWithRelations } from "@/types";
+import { getBookCoverUrl } from "@/lib/r2";
 
 interface BookCardProps {
   book: BookWithRelations;
@@ -10,18 +11,7 @@ export default function BookCard({ book }: BookCardProps) {
   const genres = book.bookGenres?.map((bg) => bg.genre?.genreName).filter(Boolean).join(", ") || "Uncategorized";
   const authorName = book.author?.authorName || "Unknown Author";
 
-  // Format book cover path for Next.js Image component
-  const getImageSrc = (path: string | null) => {
-    if (!path) return null;
-    // If it's already an absolute URL, return as is
-    if (path.startsWith('http://') || path.startsWith('https://')) {
-      return path;
-    }
-    // If it's a relative path without leading slash, add it
-    return path.startsWith('/') ? path : `/${path}`;
-  };
-
-  const coverImageSrc = getImageSrc(book.bookCoverPath);
+  const coverImageSrc = getBookCoverUrl(book.bookCoverPath);
 
   return (
     <Link href={`/books/${book.id}`} className="group">

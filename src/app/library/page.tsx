@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useSidebar } from "@/components/providers/sidebar-provider";
 import Header from "@/components/ui/header";
 import Sidebar from "@/components/ui/sidebar";
+import { getBookCoverUrl } from "@/lib/r2";
 
 interface Book {
   id: string;
@@ -94,24 +95,27 @@ export default function LibraryPage() {
                   >
                     {/* Book Cover */}
                     <div className="relative aspect-[2/3] bg-[#2A2A2A] rounded-lg overflow-hidden mb-2">
-                      {book.bookCoverPath ? (
-                        <img
-                          src={book.bookCoverPath}
-                          alt={book.bookName}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          onError={(e) => {
-                            e.currentTarget.style.display = "none";
-                            const parent = e.currentTarget.parentElement;
-                            if (parent) {
-                              parent.innerHTML = `<div class="w-full h-full flex items-center justify-center text-gray-500 text-3xl font-bold">${book.bookName.charAt(0)}</div>`;
-                            }
-                          }}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-gray-500 text-3xl font-bold">
-                          {book.bookName.charAt(0)}
-                        </div>
-                      )}
+                      {(() => {
+                        const coverUrl = getBookCoverUrl(book.bookCoverPath);
+                        return coverUrl ? (
+                          <img
+                            src={coverUrl}
+                            alt={book.bookName}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              e.currentTarget.style.display = "none";
+                              const parent = e.currentTarget.parentElement;
+                              if (parent) {
+                                parent.innerHTML = `<div class="w-full h-full flex items-center justify-center text-gray-500 text-3xl font-bold">${book.bookName.charAt(0)}</div>`;
+                              }
+                            }}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-500 text-3xl font-bold">
+                            {book.bookName.charAt(0)}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* Book Info */}

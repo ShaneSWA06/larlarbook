@@ -7,6 +7,7 @@ import { useSidebar } from "@/components/providers/sidebar-provider";
 import Header from "@/components/ui/header";
 import Sidebar from "@/components/ui/sidebar";
 import { PenLine, Layers } from "lucide-react";
+import { getBookCoverUrl } from "@/lib/r2";
 
 interface Book {
   id: string;
@@ -34,21 +35,38 @@ export default function BooksPage() {
   useEffect(() => {
     if (session?.user?.id) {
       fetchBooks();
+    } else if (session === null) {
+      // Session loaded but no user - set loading to false
+      setLoading(false);
     }
   }, [session]);
 
   const fetchBooks = async () => {
     try {
       setLoading(true);
+      if (!session?.user?.id) {
+        console.error("No user ID available");
+        setBooks([]);
+        return;
+      }
       // Fetch only the current user's books
-      const response = await fetch(`/api/books?limit=50&offset=0&userId=${session?.user?.id}`);
+      const response = await fetch(`/api/books?limit=50&offset=0&userId=${session.user.id}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const data = await response.json();
 
       if (data.success) {
         setBooks(data.books || []);
+      } else {
+        console.error("Failed to fetch books:", data.error);
+        setBooks([]);
       }
     } catch (err) {
       console.error("Error loading books:", err);
+      setBooks([]);
     } finally {
       setLoading(false);
     }
@@ -61,46 +79,58 @@ export default function BooksPage() {
   const BookCard = ({ book }: { book: Book }) => (
     <div
       onClick={() => router.push(`/books/${book.id}/write`)}
-      className="group cursor-pointer"
+      className="group cursor-pointer bg-[#221f20] rounded-lg overflow-hidden hover:opacity-90 transition-opacity flex flex-col"
     >
-      {/* Book Cover */}
-      <div className="relative aspect-[2/3] bg-[#2A2A2A] rounded-lg overflow-hidden mb-3">
-        {book.bookCoverPath ? (
-          <img
-            src={book.bookCoverPath}
-            alt={book.bookName}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            onError={(e) => {
-              e.currentTarget.style.display = "none";
-              const parent = e.currentTarget.parentElement;
-              if (parent) {
-                parent.innerHTML = `<div class="w-full h-full flex items-center justify-center text-gray-500 text-4xl font-bold">${book.bookName.charAt(0)}</div>`;
-              }
-            }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-gray-500 text-4xl font-bold">
-            {book.bookName.charAt(0)}
+      <div className="flex gap-4 p-4 flex-1">
+        {/* Book Cover - Left Side */}
+        <div className="flex-shrink-0 w-32">
+          <div className="relative aspect-[2/3] bg-[#2A2A2A] rounded-lg overflow-hidden">
+            {(() => {
+              const coverUrl = getBookCoverUrl(book.bookCoverPath);
+              return coverUrl ? (
+                <img
+                  src={coverUrl}
+                  alt={book.bookName}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                  onError={(e) => {
+                    e.currentTarget.style.display = "none";
+                    const parent = e.currentTarget.parentElement;
+                    if (parent) {
+                      parent.innerHTML = `<div class="w-full h-full flex items-center justify-center text-gray-500 text-2xl font-bold">${book.bookName.charAt(0)}</div>`;
+                    }
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-gray-500 text-2xl font-bold">
+                  {book.bookName.charAt(0)}
+                </div>
+              );
+            })()}
           </div>
-        )}
-      </div>
+        </div>
 
-      {/* Book Info */}
-      <div>
-        <h3 className="text-white font-semibold text-sm mb-1 line-clamp-2">
-          {book.bookName}
-        </h3>
-        {book.description && (
-          <p className="text-gray-400 text-xs mb-2 line-clamp-3">
-            {book.description}
-          </p>
-        )}
-        {/* Genre Tags */}
+        {/* Book Info - Right Side */}
+        <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1">
+            <h3 className="text-[#eeeeee] font-semibold text-lg mb-2 line-clamp-2">
+              {book.bookName}
+            </h3>
+            {book.description && (
+              <p className="text-[#eeeeee] text-sm mb-3 line-clamp-2">
+                {book.description}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+      
+      {/* Genre Tags - Bottom */}
+      <div className="px-4 pb-4">
         <div className="flex flex-wrap gap-1">
-          {book.bookGenres?.slice(0, 3).map((bg, idx) => (
+          {book.bookGenres?.slice(0, 5).map((bg, idx) => (
             <span
               key={idx}
-              className="text-xs text-gray-400 bg-[#2A2A2A] px-2 py-1 rounded"
+              className="text-xs text-[#d1b9f0] bg-[#221f20] px-2 py-1 rounded border border-[#454545]"
             >
               {bg.genre.genreName}
             </span>
@@ -111,66 +141,41 @@ export default function BooksPage() {
   );
 
   const SeriesCard = ({ books }: { books: Book[] }) => (
-    <div className="group cursor-pointer">
-      {/* Series Preview - Show 3 books */}
-      <div className="relative h-64 mb-3">
-        <div className="absolute left-0 top-0 w-[45%] h-full">
-          <div className="relative aspect-[2/3] bg-[#2A2A2A] rounded-lg overflow-hidden">
-            {books[0]?.bookCoverPath ? (
-              <img
-                src={books[0].bookCoverPath}
-                alt={books[0].bookName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-500 text-2xl font-bold">
-                {books[0]?.bookName.charAt(0)}
+    <div className="group cursor-pointer flex-shrink-0 w-80">
+      {/* Series Preview - Show multiple book covers side by side */}
+      <div className="flex gap-2 mb-3">
+        {books.slice(0, 5).map((book, idx) => {
+          const coverUrl = getBookCoverUrl(book.bookCoverPath);
+          return (
+            <div key={idx} className="flex-shrink-0 w-16">
+              <div className="relative aspect-[2/3] bg-[#2A2A2A] rounded-lg overflow-hidden">
+                {coverUrl ? (
+                  <img
+                    src={coverUrl}
+                    alt={book.bookName}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-gray-500 text-xs font-bold">
+                    {book.bookName.charAt(0)}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
-        <div className="absolute left-[35%] top-0 w-[45%] h-full">
-          <div className="relative aspect-[2/3] bg-[#2A2A2A] rounded-lg overflow-hidden">
-            {books[1]?.bookCoverPath ? (
-              <img
-                src={books[1].bookCoverPath}
-                alt={books[1].bookName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-500 text-2xl font-bold">
-                {books[1]?.bookName.charAt(0)}
-              </div>
-            )}
-          </div>
-        </div>
-        <div className="absolute right-0 top-0 w-[45%] h-full">
-          <div className="relative aspect-[2/3] bg-[#2A2A2A] rounded-lg overflow-hidden">
-            {books[2]?.bookCoverPath ? (
-              <img
-                src={books[2].bookCoverPath}
-                alt={books[2].bookName}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center text-gray-500 text-2xl font-bold">
-                {books[2]?.bookName.charAt(0)}
-              </div>
-            )}
-          </div>
-        </div>
+            </div>
+          );
+        })}
       </div>
 
       {/* Series Info */}
       <div>
-        <h3 className="text-white font-semibold mb-1">
-          {books[0]?.bookName} Series
+        <h3 className="text-white font-semibold text-base mb-2">
+          {books[0]?.bookName}
         </h3>
-        <p className="text-gray-400 text-sm mb-2 line-clamp-3">
+        <p className="text-gray-400 text-sm mb-3 line-clamp-3">
           {books[0]?.description}
         </p>
         <div className="flex flex-wrap gap-1">
-          {books[0]?.bookGenres?.slice(0, 3).map((bg, idx) => (
+          {books[0]?.bookGenres?.slice(0, 5).map((bg, idx) => (
             <span
               key={idx}
               className="text-xs text-gray-400 bg-[#2A2A2A] px-2 py-1 rounded"
@@ -201,14 +206,14 @@ export default function BooksPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => router.push("/books/upload")}
-                className="flex items-center gap-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-medium px-6 py-3 rounded-lg transition-colors"
+                className="flex items-center gap-2 bg-[#67377e] hover:bg-[#5a2f6b] text-white font-medium px-6 py-3 rounded-lg transition-colors"
               >
                 <PenLine className="w-5 h-5" />
                 Write Book
               </button>
               <button
                 onClick={() => alert("Make Series feature coming soon!")}
-                className="flex items-center gap-2 bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-medium px-6 py-3 rounded-lg transition-colors"
+                className="flex items-center gap-2 bg-[#67377e] hover:bg-[#5a2f6b] text-white font-medium px-6 py-3 rounded-lg transition-colors"
               >
                 <Layers className="w-5 h-5" />
                 Make Series
@@ -228,7 +233,7 @@ export default function BooksPage() {
                   <h2 className="text-white text-xl font-semibold mb-4">
                     Drafts
                   </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                  <div className="grid grid-cols-3 gap-4">
                     {drafts.map((book) => (
                       <BookCard key={book.id} book={book} />
                     ))}
@@ -242,7 +247,7 @@ export default function BooksPage() {
                   <h2 className="text-white text-xl font-semibold mb-4">
                     Published Books
                   </h2>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+                  <div className="grid grid-cols-3 gap-4">
                     {published.map((book) => (
                       <BookCard key={book.id} book={book} />
                     ))}
@@ -250,14 +255,17 @@ export default function BooksPage() {
                 </section>
               )}
 
-              {/* Published Series Section - Placeholder */}
+              {/* Published Series Section */}
               {published.length >= 3 && (
                 <section className="mb-12">
                   <h2 className="text-white text-xl font-semibold mb-4">
                     Published Series
                   </h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  <div className="flex gap-6 overflow-x-auto pb-4 scrollbar-hide">
                     <SeriesCard books={published.slice(0, 3)} />
+                    {published.length >= 6 && (
+                      <SeriesCard books={published.slice(3, 6)} />
+                    )}
                   </div>
                 </section>
               )}
@@ -272,7 +280,7 @@ export default function BooksPage() {
                   </p>
                   <button
                     onClick={() => router.push("/books/upload")}
-                    className="bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-medium px-6 py-3 rounded-lg transition-colors"
+                    className="bg-[#67377e] hover:bg-[#5a2f6b] text-white font-medium px-6 py-3 rounded-lg transition-colors"
                   >
                     Write Book
                   </button>

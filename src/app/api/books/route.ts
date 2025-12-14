@@ -16,15 +16,32 @@ export async function GET(request: Request) {
         ? {
             OR: [
               { bookName: { contains: search, mode: "insensitive" as const } },
-              { description: { contains: search, mode: "insensitive" as const } },
+              {
+                description: { contains: search, mode: "insensitive" as const },
+              },
             ],
           }
         : {}),
       ...(userId
         ? {
-            author: {
-              userId: userId,
-            },
+            OR: [
+              // Check direct author relation (backward compatibility)
+              {
+                author: {
+                  userId: userId,
+                },
+              },
+              // Check multiple authors through bookAuthors
+              {
+                bookAuthors: {
+                  some: {
+                    author: {
+                      userId: userId,
+                    },
+                  },
+                },
+              },
+            ],
           }
         : {}),
     };
@@ -36,6 +53,11 @@ export async function GET(request: Request) {
         skip: offset,
         include: {
           author: true,
+          bookAuthors: {
+            include: {
+              author: true,
+            },
+          },
           publishers: true,
           bookGenres: {
             include: {
@@ -56,16 +78,45 @@ export async function GET(request: Request) {
     ]);
 
     // Convert BigInt IDs to strings for JSON serialization
-    const booksWithConvertedIds = books.map(book => ({
+    const booksWithConvertedIds = books.map((book) => ({
       ...book,
-      bookGenres: book.bookGenres.map(bg => ({
+      id: book.id.toString(),
+      bookAuthors: book.bookAuthors?.map((ba) => ({
+        ...ba,
+        id: ba.id.toString(),
+        author: ba.author
+          ? {
+              ...ba.author,
+              id: ba.author.id.toString(),
+            }
+          : null,
+      })) || [],
+      bookGenres: book.bookGenres.map((bg) => ({
         ...bg,
         id: bg.id.toString(),
+        genre: bg.genre
+          ? {
+              ...bg.genre,
+              id: bg.genre.id.toString(),
+            }
+          : null,
       })),
-      bookPublishers: book.bookPublishers.map(bp => ({
+      bookPublishers: book.bookPublishers.map((bp) => ({
         ...bp,
         id: bp.id.toString(),
+        publisher: bp.publisher
+          ? {
+              ...bp.publisher,
+              id: bp.publisher.id.toString(),
+            }
+          : null,
       })),
+      author: book.author
+        ? {
+            ...book.author,
+            id: book.author.id.toString(),
+          }
+        : null,
     }));
 
     return NextResponse.json({
@@ -94,7 +145,9 @@ export async function POST(request: Request) {
     const {
       bookName,
       description,
+      subtitle,
       authorId,
+      authorIds,
       genreIds,
       isbn,
       pageCount,
@@ -103,12 +156,13 @@ export async function POST(request: Request) {
       publicationDate,
       status,
       bookCoverPath,
-      userId, // Get userId from request
+      pdfPath,
+      userId, // Get userId for request
     } = body;
 
     // Find or create publisher for the user
     let publisherId: string | undefined;
-    
+
     if (userId) {
       // Check if user already has a publisher
       let publisher = await prisma.publisher.findUnique({
@@ -133,12 +187,23 @@ export async function POST(request: Request) {
       publisherId = publisher.id;
     }
 
+    // Prepare authorIds array
+    let finalAuthorIds: string[] = [];
+    if (authorIds && Array.isArray(authorIds) && authorIds.length > 0) {
+      finalAuthorIds = authorIds.filter(
+        (aid: any) => aid && String(aid).trim() !== ""
+      );
+    } else if (authorId) {
+      finalAuthorIds = [String(authorId).trim()];
+    }
+
     // Create book with relations
     const book = await prisma.book.create({
       data: {
         bookName,
+        subtitle,
         description,
-        author: authorId ? { connect: { id: authorId } } : undefined,
+        author: authorId ? { connect: { id: authorId } } : undefined, // Keep for backward compatibility
         publishers: publisherId ? { connect: { id: publisherId } } : undefined,
         isbn,
         pageCount,
@@ -147,6 +212,14 @@ export async function POST(request: Request) {
         publicationDate,
         status: status || "draft",
         bookCoverPath,
+        bookAuthors:
+          finalAuthorIds.length > 0
+            ? {
+                create: finalAuthorIds.map((aid: string) => ({
+                  authorId: aid,
+                })),
+              }
+            : undefined,
         bookGenres: genreIds
           ? {
               create: genreIds.map((genreId: string) => ({
@@ -156,14 +229,21 @@ export async function POST(request: Request) {
           : undefined,
         bookPublishers: publisherId
           ? {
-              create: [{
-                publisherId: publisherId,
-              }],
+              create: [
+                {
+                  publisherId: publisherId,
+                },
+              ],
             }
           : undefined,
       },
       include: {
         author: true,
+        bookAuthors: {
+          include: {
+            author: true,
+          },
+        },
         publishers: true,
         bookGenres: {
           include: {
@@ -178,20 +258,87 @@ export async function POST(request: Request) {
       },
     });
 
+    // Handle PDF upload if provided
+    if (pdfPath !== undefined && pdfPath !== null && pdfPath !== "") {
+      console.log(`Saving PDF for new book: ${pdfPath}`);
+      try {
+        // Create BookContent record for PDF
+        await prisma.bookContent.create({
+          data: {
+            bookId: book.id,
+            contentType: "pdf",
+            pdfPath: pdfPath,
+          },
+        });
+        console.log(`Created PDF content record for new book`);
+        
+        // Auto-publish the book when PDF is uploaded (if status is not explicitly set)
+        if (!status || status === "draft") {
+          await prisma.book.update({
+            where: { id: book.id },
+            data: { status: "published" },
+          });
+          console.log(`Auto-publishing new book ${book.id} due to PDF upload`);
+          // Update the book object for response
+          book.status = "published";
+        }
+      } catch (error) {
+        console.error("Error saving PDF to database:", error);
+      }
+    }
+
     // Convert BigInt IDs to strings for JSON serialization
     const bookWithConvertedIds = {
       ...book,
-      bookGenres: book.bookGenres.map(bg => ({
+      id: book.id.toString(),
+      bookAuthors: book.bookAuthors.map((ba) => ({
+        ...ba,
+        id: ba.id.toString(),
+        author: ba.author
+          ? {
+              ...ba.author,
+              id: ba.author.id.toString(),
+            }
+          : null,
+      })),
+      bookGenres: book.bookGenres.map((bg) => ({
         ...bg,
         id: bg.id.toString(),
+        genre: bg.genre
+          ? {
+              ...bg.genre,
+              id: bg.genre.id.toString(),
+            }
+          : null,
       })),
-      bookPublishers: book.bookPublishers.map(bp => ({
+      bookPublishers: book.bookPublishers.map((bp) => ({
         ...bp,
         id: bp.id.toString(),
+        publisher: bp.publisher
+          ? {
+              ...bp.publisher,
+              id: bp.publisher.id.toString(),
+            }
+          : null,
       })),
+      author: book.author
+        ? {
+            ...book.author,
+            id: book.author.id.toString(),
+          }
+        : null,
+      publishers: book.publishers
+        ? {
+            ...book.publishers,
+            id: book.publishers.id.toString(),
+          }
+        : null,
     };
 
-    return NextResponse.json({ success: true, book: bookWithConvertedIds }, { status: 201 });
+    return NextResponse.json(
+      { success: true, book: bookWithConvertedIds },
+      { status: 201 }
+    );
   } catch (error: any) {
     console.error("Error creating book:", error);
     return NextResponse.json(

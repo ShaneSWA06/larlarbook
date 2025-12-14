@@ -4,8 +4,13 @@ const nextConfig: NextConfig = {
   images: {
     remotePatterns: [
       {
-        protocol: 'https',
-        hostname: '**',
+        protocol: "https",
+        hostname: "**",
+      },
+      // Cloudflare R2 public URL
+      {
+        protocol: "https",
+        hostname: "pub-*.r2.dev",
       },
     ],
     // Allow local images from public directory

@@ -25,7 +25,8 @@
 }
 
 body {
-  font-family: var(--font-nunito), var(--font-noto-myanmar), system-ui, sans-serif;
+  font-family: var(--font-nunito), var(--font-noto-myanmar), system-ui,
+    sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
 }
 
@@ -52,4 +53,25 @@ body {
 .reading-content.myanmar-text {
   line-height: 2;
   letter-spacing: 0.02em;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* Force white text in reading content for focus and calm themes */
+.reading-content-white,
+.reading-content-white *,
+.reading-content-white span,
+.reading-content-white p,
+.reading-content-white div,
+.reading-content-white font,
+.reading-content-white br {
+  color: #eeeeee !important;
 }

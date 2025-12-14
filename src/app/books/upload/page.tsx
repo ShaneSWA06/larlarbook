@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { useSidebar } from "@/components/providers/sidebar-provider";
 import Header from "@/components/ui/header";
 import Sidebar from "@/components/ui/sidebar";
 import { ImagePlus, X, Plus, ChevronDown, Upload, Check } from "lucide-react";
+import { getBookCoverUrl } from "@/lib/r2";
 
 interface Genre {
   id: string;
@@ -20,14 +21,26 @@ interface Author {
 }
 
 const LANGUAGES = [
-  "English", "Spanish", "French", "German", "Chinese", "Japanese",
-  "Korean", "Portuguese", "Russian", "Arabic", "Hindi", "Italian"
+  "English",
+  "Spanish",
+  "French",
+  "German",
+  "Chinese",
+  "Japanese",
+  "Korean",
+  "Portuguese",
+  "Russian",
+  "Arabic",
+  "Hindi",
+  "Italian",
 ];
 
 export default function UploadBookPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session, status } = useSession();
   const { expanded: sidebarExpanded, toggle } = useSidebar();
+  const bookId = searchParams.get("bookId");
 
   const [formData, setFormData] = useState({
     title: "",
@@ -45,38 +58,84 @@ export default function UploadBookPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [coverPreview, setCoverPreview] = useState("");
+  const [bookStatus, setBookStatus] = useState<string | null>(null);
+  const [isPublished, setIsPublished] = useState(false);
 
   // Modal states
   const [showAuthorModal, setShowAuthorModal] = useState(false);
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
   const [showGenreModal, setShowGenreModal] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
+  const [uploadingPdf, setUploadingPdf] = useState(false);
+  const [pdfPath, setPdfPath] = useState<string>("");
 
-  // Load saved data from sessionStorage on mount
+  // Load saved data from sessionStorage on mount (only if not editing existing book)
   useEffect(() => {
-    const savedData = sessionStorage.getItem('bookUploadData');
+    // Don't load from sessionStorage if editing an existing book
+    if (bookId) return;
+
+    const savedData = sessionStorage.getItem("bookUploadData");
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
         setFormData(parsed.formData || formData);
         setSelectedGenres(parsed.selectedGenres || []);
         setSelectedAuthors(parsed.selectedAuthors || []);
-        setCoverPreview(parsed.coverPreview || "");
+        // Use bookCoverPath URL if available, otherwise use coverPreview (if it's a URL)
+        const coverUrl =
+          parsed.formData?.bookCoverPath || parsed.coverPreview || "";
+        // Only set preview if it's a URL (not base64)
+        if (coverUrl && !coverUrl.startsWith("data:")) {
+          setCoverPreview(coverUrl);
+        }
       } catch (error) {
         console.error("Error loading saved data:", error);
       }
     }
-  }, []);
+  }, [bookId]);
 
   // Save form data to sessionStorage whenever it changes
+  // Don't save base64 coverPreview to avoid quota errors - only save URLs
   useEffect(() => {
+    // Only save coverPreview if it's a URL (not base64 data)
+    const coverToSave =
+      coverPreview && !coverPreview.startsWith("data:")
+        ? coverPreview
+        : formData.bookCoverPath || "";
+
     const dataToSave = {
-      formData,
+      formData: {
+        ...formData,
+        // Ensure we're saving the URL, not base64
+        bookCoverPath: formData.bookCoverPath || coverToSave,
+      },
       selectedGenres,
       selectedAuthors,
-      coverPreview,
+      // Only save URL, not base64 preview
+      coverPreview: coverToSave,
     };
-    sessionStorage.setItem('bookUploadData', JSON.stringify(dataToSave));
+
+    try {
+      sessionStorage.setItem("bookUploadData", JSON.stringify(dataToSave));
+    } catch (error) {
+      // If storage quota exceeded, try saving without coverPreview
+      console.warn(
+        "SessionStorage quota exceeded, saving without cover preview"
+      );
+      const dataToSaveWithoutCover = {
+        formData: {
+          ...formData,
+          bookCoverPath: formData.bookCoverPath || "",
+        },
+        selectedGenres,
+        selectedAuthors,
+        coverPreview: "",
+      };
+      sessionStorage.setItem(
+        "bookUploadData",
+        JSON.stringify(dataToSaveWithoutCover)
+      );
+    }
   }, [formData, selectedGenres, selectedAuthors, coverPreview]);
 
   useEffect(() => {
@@ -85,7 +144,81 @@ export default function UploadBookPage() {
     if (session?.user?.id) {
       checkOrCreateAuthorProfile();
     }
-  }, [session]);
+    // If editing an existing book, fetch its data
+    if (bookId) {
+      fetchBookData();
+    }
+  }, [session, bookId]);
+
+  const fetchBookData = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(`/api/books/${bookId}`);
+      const data = await response.json();
+
+      if (data.success && data.book) {
+        const book = data.book;
+        setBookStatus(book.status || null);
+        setIsPublished(book.status === "published");
+
+        // Populate form with existing book data
+        setFormData({
+          title: book.bookName || "",
+          subtitle: (book as any).subtitle || "",
+          language: book.language || "English",
+          synopsis: book.description || "",
+          bookCoverPath: book.bookCoverPath || "",
+        });
+
+        if (book.bookCoverPath && book.bookCoverPath.trim() !== "") {
+          const path = book.bookCoverPath.trim();
+          // Only set preview if it's a valid path (not a placeholder that might not exist)
+          // Skip paths that look like placeholders (e.g., "untitled-book.jpg" without timestamp)
+          const isPlaceholder =
+            path.includes("untitled-book") && !path.match(/\d{13}/); // Check for timestamp
+          if (!isPlaceholder) {
+            const coverUrl = getBookCoverUrl(book.bookCoverPath);
+            if (coverUrl) {
+              setCoverPreview(coverUrl);
+            }
+          } else {
+            // Clear invalid placeholder path
+            setFormData({ ...formData, bookCoverPath: "" });
+          }
+        }
+
+        // Set selected genres
+        if (book.bookGenres && book.bookGenres.length > 0) {
+          const genreIds = book.bookGenres
+            .map((bg: any) => {
+              // Handle different possible structures
+              if (bg.genreId) return bg.genreId;
+              if (bg.genre?.id) return bg.genre.id;
+              return bg.id;
+            })
+            .filter(Boolean);
+          setSelectedGenres(genreIds);
+        }
+
+        // Set selected authors - support multiple authors
+        if (
+          (book as any).authors &&
+          Array.isArray((book as any).authors) &&
+          (book as any).authors.length > 0
+        ) {
+          setSelectedAuthors((book as any).authors);
+        } else if (book.author) {
+          // Fallback to single author for backward compatibility
+          setSelectedAuthors([book.author]);
+        }
+      }
+    } catch (err) {
+      console.error("Error fetching book data:", err);
+      setError("Failed to load book data");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const fetchGenres = async () => {
     try {
@@ -145,6 +278,9 @@ export default function UploadBookPage() {
   };
 
   const handleGenreToggle = (genreId: string) => {
+    // Don't allow changes if book is published
+    if (isPublished) return;
+
     setSelectedGenres((prev) =>
       prev.includes(genreId)
         ? prev.filter((id) => id !== genreId)
@@ -153,38 +289,164 @@ export default function UploadBookPage() {
   };
 
   const handleAddAuthor = (author: Author) => {
+    // Don't allow changes if book is published
+    if (isPublished) {
+      setShowAuthorModal(false);
+      return;
+    }
+
     if (!selectedAuthors.find((a) => a.id === author.id)) {
-      setSelectedAuthors([...selectedAuthors, author]);
+      const updatedAuthors = [...selectedAuthors, author];
+      setSelectedAuthors(updatedAuthors);
+      console.log("Author added:", author, "Selected authors:", updatedAuthors);
     }
     setShowAuthorModal(false);
   };
 
   const handleRemoveAuthor = (authorId: string) => {
+    // Don't allow changes if book is published
+    if (isPublished) return;
+
     setSelectedAuthors((prev) => prev.filter((a) => a.id !== authorId));
   };
 
   const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Don't allow changes if book is published
+    if (isPublished) return;
+
     const url = e.target.value;
     setFormData({ ...formData, bookCoverPath: url });
     setCoverPreview(url);
   };
 
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Don't allow upload if book is published
+    if (isPublished) {
+      e.target.value = ""; // Reset file input
+      return;
+    }
+
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.includes("pdf")) {
+      setError("Please upload a PDF file");
+      e.target.value = ""; // Reset file input
+      return;
+    }
+
+    setUploadingPdf(true);
+    setError("");
+
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append("file", file);
+      if (bookId) {
+        uploadFormData.append("bookId", bookId);
+      }
+      uploadFormData.append("bookName", formData.title || "Untitled Book");
+
+      const uploadResponse = await fetch("/api/upload/pdf", {
+        method: "POST",
+        body: uploadFormData,
+      });
+
+      const uploadData = await uploadResponse.json();
+
+      if (uploadData.success) {
+        setPdfPath(uploadData.path);
+
+        // Auto-save and publish the book when PDF is uploaded
+        await handleAutoPublishWithPdf(uploadData.path);
+      } else {
+        throw new Error(uploadData.error || "Failed to upload PDF");
+      }
+    } catch (err) {
+      console.error("Error uploading PDF:", err);
+      setError(err instanceof Error ? err.message : "Failed to upload PDF");
+      setPdfPath("");
+    } finally {
+      setUploadingPdf(false);
+      e.target.value = ""; // Reset file input
+    }
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Allow image uploads even if PDF is uploaded (cover can be changed)
+    // Only block if book is manually published via "Write Here" button
+    // We check if it's published AND has no PDF (meaning it was published via Write Here)
+    if (isPublished && !pdfPath) {
+      e.target.value = ""; // Reset file input
+      return;
+    }
+
     const file = e.target.files?.[0];
     if (!file) return;
 
     setUploadingCover(true);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const result = reader.result as string;
-      setCoverPreview(result);
-      setFormData({ ...formData, bookCoverPath: result });
+    setError("");
+
+    try {
+      // Convert file to base64
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        try {
+          const dataUrl = reader.result as string;
+
+          // Show preview immediately
+          setCoverPreview(dataUrl);
+
+          // Upload to R2
+          const uploadResponse = await fetch("/api/upload/cover", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              dataUrl: dataUrl,
+              bookName: formData.title || "Untitled Book",
+              filename: file.name,
+            }),
+          });
+
+          const uploadData = await uploadResponse.json();
+
+          if (uploadData.success) {
+            // Store only the path (e.g., "book-covers/my-book.jpg")
+            const coverPath = uploadData.path;
+            setFormData({ ...formData, bookCoverPath: coverPath });
+            // For preview, construct the full URL
+            const previewUrl = `https://pub-2bfaf8b6468e4b76ac7209e67f8b0fba.r2.dev/${coverPath}`;
+            setCoverPreview(previewUrl);
+          } else {
+            throw new Error(uploadData.error || "Failed to upload cover");
+          }
+        } catch (err) {
+          console.error("Error uploading to R2:", err);
+          setError(
+            err instanceof Error ? err.message : "Failed to upload cover"
+          );
+          // Fallback: keep base64 for preview only, but don't save to formData
+          // This prevents sessionStorage quota issues
+          // The base64 will only be in coverPreview for display, not persisted
+          const dataUrl = reader.result as string;
+          // Keep base64 in coverPreview for immediate display
+          // But don't save it to formData to avoid sessionStorage quota
+          // User will need to retry upload or use URL input instead
+        } finally {
+          setUploadingCover(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("Error reading file:", err);
+      setError("Failed to read file");
       setUploadingCover(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
-  const handleWriteHere = async () => {
+  const handleAutoPublishWithPdf = async (pdfPathValue: string) => {
     if (!formData.title) {
       setError("Please enter a book title first");
       return;
@@ -194,6 +456,116 @@ export default function UploadBookPage() {
     setError("");
 
     try {
+      // Get all author IDs from selected authors
+      const authorIds =
+        selectedAuthors.length > 0
+          ? selectedAuthors.map((a) => a.id)
+          : userAuthorId
+          ? [userAuthorId]
+          : [];
+
+      const bookData = {
+        bookName: formData.title,
+        description: formData.synopsis,
+        subtitle: formData.subtitle,
+        language: formData.language,
+        status: "published", // Auto-publish when PDF is uploaded
+        bookCoverPath: formData.bookCoverPath,
+        authorIds: authorIds,
+        genreIds: selectedGenres,
+        userId: session?.user?.id,
+        pdfPath: pdfPathValue,
+      };
+
+      // If editing existing book, use PATCH
+      if (bookId) {
+        const response = await fetch(`/api/books/${bookId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookName: bookData.bookName,
+            description: bookData.description,
+            subtitle: bookData.subtitle,
+            language: bookData.language,
+            bookCoverPath: bookData.bookCoverPath,
+            authorIds: bookData.authorIds,
+            genreIds: bookData.genreIds,
+            status: "published", // Auto-publish
+            pdfPath: pdfPathValue,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          setIsPublished(true);
+          setBookStatus("published");
+        } else {
+          setError(data.error || "Failed to publish book");
+        }
+      } else {
+        // Creating new book
+        const response = await fetch("/api/books", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...bookData,
+            pdfPath: pdfPathValue,
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          setIsPublished(true);
+          setBookStatus("published");
+          // Update bookId so the book can be edited later
+          if (data.book?.id) {
+            router.replace(`/books/upload?bookId=${data.book.id}`);
+          }
+        } else {
+          setError(data.error || "Failed to publish book");
+        }
+      }
+    } catch (err) {
+      console.error("Error auto-publishing book:", err);
+      setError(err instanceof Error ? err.message : "Failed to publish book");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleWriteHere = async () => {
+    // Don't allow saving if book is published
+    if (isPublished) {
+      setError("Cannot modify published books. Please create a new draft.");
+      return;
+    }
+
+    if (!formData.title) {
+      setError("Please enter a book title first");
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+
+    try {
+      // Get all author IDs from selected authors
+      const authorIds =
+        selectedAuthors.length > 0
+          ? selectedAuthors.map((a) => a.id)
+          : userAuthorId
+          ? [userAuthorId]
+          : [];
+
+      console.log("Author selection:", {
+        selectedAuthors: selectedAuthors.map((a) => ({
+          id: a.id,
+          name: a.authorName,
+        })),
+        userAuthorId: userAuthorId,
+        authorIds: authorIds,
+      });
+
       const bookData = {
         bookName: formData.title,
         description: formData.synopsis,
@@ -201,24 +573,60 @@ export default function UploadBookPage() {
         language: formData.language,
         status: "draft",
         bookCoverPath: formData.bookCoverPath,
-        authorId: selectedAuthors[0]?.id || userAuthorId,
+        authorIds: authorIds,
         genreIds: selectedGenres,
         userId: session?.user?.id, // Add userId for publisher creation
       };
 
-      const response = await fetch("/api/books", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(bookData),
+      console.log("Saving book data:", {
+        bookName: bookData.bookName,
+        subtitle: bookData.subtitle,
+        authorIds: bookData.authorIds,
+        genreIds: bookData.genreIds,
       });
 
-      const data = await response.json();
+      // If editing existing book, use PATCH
+      if (bookId) {
+        const response = await fetch(`/api/books/${bookId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            bookName: bookData.bookName,
+            description: bookData.description,
+            subtitle: bookData.subtitle,
+            language: bookData.language,
+            bookCoverPath: bookData.bookCoverPath,
+            authorIds: bookData.authorIds,
+            genreIds: bookData.genreIds,
+            status: "draft",
+            ...(pdfPath && { pdfPath: pdfPath }),
+          }),
+        });
 
-      if (data.success) {
-        // DON'T clear sessionStorage - keep data for when user navigates back
-        router.push(`/books/${data.book.id}/write`);
+        const data = await response.json();
+        if (data.success) {
+          router.push(`/books/${bookId}/write`);
+        } else {
+          setError(data.error || "Failed to update book");
+        }
       } else {
-        setError(data.error || "Failed to save book");
+        // Creating new book
+        const response = await fetch("/api/books", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...bookData,
+            ...(pdfPath && { pdfPath: pdfPath }),
+          }),
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          // DON'T clear sessionStorage - keep data for when user navigates back
+          router.push(`/books/${data.book.id}/write`);
+        } else {
+          setError(data.error || "Failed to save book");
+        }
       }
     } catch (err) {
       setError("Error saving book");
@@ -229,7 +637,7 @@ export default function UploadBookPage() {
   };
 
   const clearForm = () => {
-    sessionStorage.removeItem('bookUploadData');
+    sessionStorage.removeItem("bookUploadData");
     setFormData({
       title: "",
       subtitle: "",
@@ -238,7 +646,9 @@ export default function UploadBookPage() {
       bookCoverPath: "",
     });
     setSelectedGenres([]);
-    setSelectedAuthors(userAuthorId ? authors.filter(a => a.id === userAuthorId) : []);
+    setSelectedAuthors(
+      userAuthorId ? authors.filter((a) => a.id === userAuthorId) : []
+    );
     setCoverPreview("");
   };
 
@@ -277,15 +687,34 @@ export default function UploadBookPage() {
                     alt="Book cover"
                     className="w-full h-full object-cover"
                     onError={(e) => {
-                      e.currentTarget.style.display = 'none';
+                      // Clear invalid cover path to prevent 404 loops
+                      setCoverPreview("");
+                      setFormData((prev) => ({ ...prev, bookCoverPath: "" }));
+                      e.currentTarget.style.display = "none";
                       const parent = e.currentTarget.parentElement;
                       if (parent) {
-                        parent.innerHTML = '<div class="text-center text-gray-500"><div class="w-12 h-12 mx-auto mb-2"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div><p class="text-sm">Image failed to load</p></div>';
+                        parent.innerHTML =
+                          '<div class="text-center text-gray-500"><div class="w-12 h-12 mx-auto mb-2"><svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg></div><p class="text-sm">Image failed to load</p></div>';
                       }
                     }}
                   />
-                  <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
-                    <Upload className="w-8 h-8 text-white" />
+                  {(!isPublished || pdfPath) && (
+                    <label className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center cursor-pointer">
+                      <Upload className="w-8 h-8 text-white" />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  )}
+                </>
+              ) : (
+                (!isPublished || pdfPath) && (
+                  <label className="text-center text-gray-500 cursor-pointer">
+                    <ImagePlus className="w-12 h-12 mx-auto mb-2" />
+                    <p className="text-sm">Click to upload cover</p>
                     <input
                       type="file"
                       accept="image/*"
@@ -293,18 +722,7 @@ export default function UploadBookPage() {
                       className="hidden"
                     />
                   </label>
-                </>
-              ) : (
-                <label className="text-center text-gray-500 cursor-pointer">
-                  <ImagePlus className="w-12 h-12 mx-auto mb-2" />
-                  <p className="text-sm">Click to upload cover</p>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                </label>
+                )
               )}
               {uploadingCover && (
                 <div className="absolute inset-0 bg-black/70 flex items-center justify-center">
@@ -313,24 +731,38 @@ export default function UploadBookPage() {
               )}
             </div>
 
-            <button
-              onClick={handleWriteHere}
-              disabled={loading}
-              className="w-full bg-[#8B5CF6] hover:bg-[#7C3AED] text-white font-medium py-3 px-4 rounded-lg transition-colors mb-3 disabled:opacity-50"
-            >
-              {loading ? "Saving..." : "Write Here"}
-            </button>
+            {!isPublished && !pdfPath && (
+              <button
+                onClick={handleWriteHere}
+                disabled={loading}
+                className="w-full bg-[#67377e] hover:bg-[#5a2f6b] text-white font-medium py-3 px-4 rounded-lg transition-colors mb-3 disabled:opacity-50"
+              >
+                {loading ? "Saving..." : "Write Here"}
+              </button>
+            )}
 
-            <label className="w-full bg-[#2A2A2A] hover:bg-[#333333] text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2">
+            {pdfPath && (
+              <div className="w-full bg-green-900/50 border border-green-500 text-green-400 p-3 rounded-lg mb-3 text-sm">
+                ✓ PDF uploaded - Book will be published automatically
+              </div>
+            )}
+
+            <label className="w-full bg-[#2A2A2A] hover:bg-[#333333] text-white font-medium py-3 px-4 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               <Upload className="w-4 h-4" />
-              Upload File
+              {uploadingPdf ? "Uploading PDF..." : "Upload PDF"}
               <input
                 type="file"
-                accept=".pdf,.epub,.txt"
+                accept=".pdf"
                 className="hidden"
-                onChange={() => alert("File upload feature coming soon!")}
+                disabled={isPublished || uploadingPdf}
+                onChange={handlePdfUpload}
               />
             </label>
+            {pdfPath && (
+              <div className="mt-2 text-sm text-green-400">
+                ✓ PDF uploaded successfully
+              </div>
+            )}
           </div>
 
           {/* Main Content Area */}
@@ -353,7 +785,8 @@ export default function UploadBookPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, title: e.target.value })
                   }
-                  className="flex-1 bg-transparent border-none text-white text-4xl font-bold placeholder-gray-600 focus:outline-none"
+                  disabled={isPublished}
+                  className="flex-1 bg-transparent border-none text-white text-4xl font-bold placeholder-gray-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Title"
                 />
                 {formData.title && (
@@ -378,7 +811,8 @@ export default function UploadBookPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, subtitle: e.target.value })
                   }
-                  className="w-full bg-transparent border-none text-gray-400 text-2xl placeholder-gray-600 focus:outline-none"
+                  disabled={isPublished}
+                  className="w-full bg-transparent border-none text-gray-400 text-2xl placeholder-gray-600 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Sub Title"
                 />
               </div>
@@ -407,26 +841,32 @@ export default function UploadBookPage() {
                       )}
                     </div>
                   ))}
-                  <button
-                    onClick={() => setShowAuthorModal(true)}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white text-sm"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Author
-                  </button>
+                  {!isPublished && (
+                    <button
+                      onClick={() => setShowAuthorModal(true)}
+                      className="flex items-center gap-2 text-gray-400 hover:text-white text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Author
+                    </button>
+                  )}
                 </div>
               </div>
 
               {/* Language */}
               <div className="flex items-center gap-3 relative">
                 <button
-                  onClick={() => setShowLanguageDropdown(!showLanguageDropdown)}
-                  className="flex items-center gap-2 text-white hover:text-gray-300"
+                  onClick={() =>
+                    !isPublished &&
+                    setShowLanguageDropdown(!showLanguageDropdown)
+                  }
+                  disabled={isPublished}
+                  className="flex items-center gap-2 text-white hover:text-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <span>{formData.language}</span>
-                  <ChevronDown className="w-4 h-4" />
+                  {!isPublished && <ChevronDown className="w-4 h-4" />}
                 </button>
-                
+
                 {showLanguageDropdown && (
                   <div className="absolute top-full mt-2 bg-[#2A2A2A] border border-[#454545] rounded-lg shadow-lg z-10 max-h-60 overflow-y-auto">
                     {LANGUAGES.map((lang) => (
@@ -458,8 +898,9 @@ export default function UploadBookPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, synopsis: e.target.value })
                   }
+                  disabled={isPublished}
                   rows={4}
-                  className="w-full bg-[#232323] border border-[#454545] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#8B5CF6] p-4"
+                  className="w-full bg-[#232323] border border-[#454545] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#8B5CF6] p-4 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="Write a brief description of your book..."
                 />
               </div>
@@ -473,20 +914,23 @@ export default function UploadBookPage() {
                       <button
                         key={genre.id}
                         onClick={() => handleGenreToggle(genre.id)}
-                        className="px-4 py-2 rounded-lg text-sm bg-[#8B5CF6] text-white flex items-center gap-2"
+                        disabled={isPublished}
+                        className="px-4 py-2 rounded-lg text-sm bg-[#67377e] text-white flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {genre.genreName}
-                        <X className="w-3 h-3" />
+                        {!isPublished && <X className="w-3 h-3" />}
                       </button>
                     ) : null;
                   })}
-                  <button
-                    onClick={() => setShowGenreModal(true)}
-                    className="flex items-center gap-2 text-gray-400 hover:text-white text-sm"
-                  >
-                    <Plus className="w-4 h-4" />
-                    Add Tags
-                  </button>
+                  {!isPublished && (
+                    <button
+                      onClick={() => setShowGenreModal(true)}
+                      className="flex items-center gap-2 text-gray-400 hover:text-white text-sm"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Add Tags
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -499,7 +943,8 @@ export default function UploadBookPage() {
                   type="url"
                   value={formData.bookCoverPath}
                   onChange={handleCoverChange}
-                  className="w-full bg-[#232323] border border-[#454545] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#8B5CF6] p-4"
+                  disabled={isPublished}
+                  className="w-full bg-[#232323] border border-[#454545] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#8B5CF6] p-4 disabled:opacity-50 disabled:cursor-not-allowed"
                   placeholder="https://example.com/cover.jpg"
                 />
               </div>

@@ -68,8 +68,9 @@ model Author {
   userId                String?   @unique @map("user_id") @db.Uuid
   authorProfileImageUrl String?   @map("author_profile_image_url")
   updatedAt             DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
-  users                 users?    @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
-  books                 Book[]    @relation("BookAuthor")
+  users                 users?       @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  books                 Book[]       @relation("BookAuthor")
+  bookAuthors           BookAuthor[] @relation("BookAuthors")
 
   @@map("authors")
   @@schema("public")
@@ -105,6 +106,7 @@ model Book {
   id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   createdAt       DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   bookName        String            @map("book_name")
+  subtitle        String?           @map("subtitle")
   bookCoverPath   String?           @map("book_cover_path")
   authorId        String?           @map("author_id") @db.Uuid
   publisher_id    String?           @db.Uuid
@@ -120,6 +122,7 @@ model Book {
   bookContent     BookContent?
   bookGenres      BookGenre[]
   bookPublishers  BookPublisher[]
+  bookAuthors     BookAuthor[]      @relation("BookAuthors")
   author          Author?           @relation("BookAuthor", fields: [authorId], references: [id], onUpdate: NoAction)
   publishers      Publisher?        @relation(fields: [publisher_id], references: [id], onUpdate: NoAction)
   comments        Comment[]
@@ -147,6 +150,20 @@ model BookGenre {
   @@index([bookId], map: "idx_book_genres_book_id")
   @@index([genreId], map: "idx_book_genres_genre_id")
   @@map("book_genres")
+  @@schema("public")
+}
+
+model BookAuthor {
+  id       BigInt  @id @default(autoincrement())
+  bookId   String  @map("book_id") @db.Uuid
+  authorId String  @map("author_id") @db.Uuid
+  book     Book    @relation("BookAuthors", fields: [bookId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  author   Author  @relation("BookAuthors", fields: [authorId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([bookId, authorId])
+  @@index([bookId])
+  @@index([authorId])
+  @@map("book_authors")
   @@schema("public")
 }
 
